@@ -1,7 +1,6 @@
 import argparse
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 
 def compute_fft_magnitude(gray_image):
     f = np.fft.fft2(gray_image.astype(np.float32))
@@ -286,6 +285,7 @@ def detect_pixel_size(image):
     return pixel_size_x, pixel_size_y
 
 def grid_layout(image, x_coords, y_coords):
+    import matplotlib.pyplot as plt
     plt.figure()
     plt.imshow(image)
     plt.title("Scaled Image by Grid Sampling")
@@ -295,7 +295,7 @@ def grid_layout(image, x_coords, y_coords):
         plt.axhline(y=y, linewidth=0.6)
     plt.show()
 
-def get_perfect_pixel(image):
+def get_perfect_pixel(image, sample_method="center", debug=False):
 
     H, W = image.shape[:2]
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -345,45 +345,15 @@ def get_perfect_pixel(image):
     print(f"Refined grid size: ({refined_size_x}, {refined_size_y})")
 
     # sample by majority
-    # scaled_image = sample_majority(image, x_coords, y_coords)
+    if sample_method == "majority":
+        scaled_image = sample_majority(image, x_coords, y_coords)
 
     # sample by center
-    scaled_image = sample_center(image, x_coords, y_coords)
+    else:
+        scaled_image = sample_center(image, x_coords, y_coords)
 
     # debug
-    grid_layout(image, x_coords, y_coords)
+    if debug:
+        grid_layout(image, x_coords, y_coords)
 
     return refined_size_x, refined_size_y, scaled_image
-
-def main():
-    ap = argparse.ArgumentParser(description="Estimate pixel-art cell size from FFT spectrum lines.")
-    ap.add_argument("image", help="path to input image")
-    args = ap.parse_args()
-
-    bgr = cv2.imread(args.image, cv2.IMREAD_COLOR)
-    if bgr is None:
-        raise FileNotFoundError(f"Cannot read image: {args.image}")
-    rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-
-    size_x, size_y, scaled_image = get_perfect_pixel(rgb)
-
-    if size_x is not None and size_y is not None:
-        print(f"Estimated pixel scale: ({size_x:.2f}, {size_y:.2f}) pixels")
-    else:
-        print("Pixel size could not be estimated.")
-        return
-    
-    # Show original and scaled images
-    plt.figure(figsize=(10, 5))
-    plt.subplot(1, 2, 1)
-    plt.title("Original Image")
-    plt.imshow(rgb)
-    plt.axis("off")
-    plt.subplot(1, 2, 2)
-    plt.title("Scaled Image")
-    plt.imshow(scaled_image)
-    plt.axis("off")
-    plt.show()
-
-if __name__ == "__main__":
-    main()
