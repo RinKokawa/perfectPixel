@@ -8,6 +8,5 @@ venv/
 env/
 
 output/
-output*
 
 *.log

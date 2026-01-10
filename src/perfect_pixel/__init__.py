@@ -3,7 +3,7 @@
 Perfect Pixel: A library for auto grid detection and pixel art refinement.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.2"
 
 from .perfect_pixel_noCV2 import get_perfect_pixel as _get_perfect_pixel_numpy
 
