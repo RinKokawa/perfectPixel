@@ -65,7 +65,7 @@ rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 w, h, out = get_perfect_pixel(rgb)
 ```
 
-<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/output.png" width="50%" />
+<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/refined2.png" width="50%" />
 
 *Also see [example.py](./example.py).*
 ```bash
