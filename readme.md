@@ -5,7 +5,7 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-<img src="./assets/process.png" width="100%" />
+<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/process.png" width="100%" />
 
 Standard scaling often fails to sample AI-generated pixel art due to inconsistent sizes and non-square grids. 
 
@@ -16,7 +16,7 @@ This tool automatically detects the optimal grid and delivers perfectly aligned,
 - Refines AI generated pixel style image to perfectly aligned grids.
 - Easy to integrate into your own workflow.
 
-[Try Web Demo](#web-demo)
+[Try the Web Demo](https://theamusing.github.io/perfectPixel_webdemo/)
 
 ## Installation
 
@@ -49,7 +49,7 @@ For example, I used ChatGPT to transfer an image into pixel style.
 prompt: Convert the input image into a TRUE perler bead pixel pattern designed for physical bead crafting, not digital illustration. Canvas size must be exactly 32×32 pixels OR 16×16 pixels, where each pixel represents exactly one perler bead. Use extremely large, chunky pixels with very few active pixels overall. Simplicity is critical. Only keep the main subject. Remove the entire background. For human characters, make sure the face is flat and no shadow. The subject must be centered with clear empty bead rows around all edges to allow easy mounting on a bead board. Add a clean, continuous dark outline around the subject so the silhouette is clearly readable when made with beads. Use a very limited solid color palette (maximum 6–8 colors total). No gradients, no shading, no lighting, no dithering, no texture. No anti-aliasing or smoothing — every pixel must be a perfect square bead aligned to the grid. The output image should be pixel-perfect, each grid only contains one color. Background must be pure solid white.
 ```
 
-<img src="./assets/generated.png" width="50%" />
+<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/generated.png" width="50%" />
 
 The image is in pixel style but the grids are distorted. Also we don't know the number of grids.
 
@@ -65,7 +65,7 @@ rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
 w, h, out = get_perfect_pixel(rgb)
 ```
 
-<img src="./assets/output.png" width="50%" />
+<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/output.png" width="50%" />
 
 *Also see [example.py](./example.py).*
 ```bash
@@ -74,7 +74,7 @@ python example.py
 
 The grid size is automatically detected, and the image is refined.
 
-<img src="./assets/process2.png" width="100%" />
+<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/process2.png" width="100%" />
 
 Try integrate it into your own projects!
 
@@ -98,7 +98,7 @@ Try integrate it into your own projects!
 
 ## Algorithm
 
-<img src="./assets/algorithm.png" width="100%" />
+<img src="https://github.com/theamusing/perfectPixel/blob/main/assets/algorithm.png" width="100%" />
 
 The whole algorithm mainly contains 3 steps:
 1. Detect grid size from FFT magnitude of the original image and generate grids.

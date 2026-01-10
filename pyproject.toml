@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "perfect-pixel"  
-version = "0.1.0"
+version = "0.1.1"
 description = "A library for auto grid detection and pixel art refinement."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -30,8 +30,8 @@ classifiers = [
 opencv = ["opencv-python"]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/perfect-pixel"
-"Web Demo" = "https://github.com/yourusername/perfect-pixel/issues"
+"Homepage" = "https://github.com/theamusing/perfectPixel"
+"Web Demo" = "https://github.com/theamusing/perfectPixel_webdemo"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
