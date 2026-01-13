@@ -105,6 +105,13 @@ The whole algorithm mainly contains 3 steps:
 2. Detect edges using Sobel and refine the grids by aligning them to edges.
 3. Use the grids to sample the original image and to get the scaled image.
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=theamusing/perfectPixel&type=date&legend=top-left)](https://www.star-history.com/#theamusing/perfectPixel&type=date&legend=top-left)
+
+Thanks so much!
+
+
 
 
 
