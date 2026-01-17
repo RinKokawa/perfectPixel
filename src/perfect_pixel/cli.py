@@ -161,6 +161,23 @@ def _resize_alpha(alpha, size):
     return np.array(Image.fromarray(alpha).resize((w, h), resample=Image.NEAREST))
 
 
+def _alpha_from_source(alpha, size, coverage_threshold=0.5):
+    if alpha is None:
+        return None
+    h, w = size
+    if alpha.shape[0] == h and alpha.shape[1] == w:
+        return np.where(alpha > 0, 255, 0).astype(np.uint8)
+    binary = np.where(alpha > 0, 255, 0).astype(np.uint8)
+    if cv2 is not None:
+        resized = cv2.resize(binary, (w, h), interpolation=cv2.INTER_AREA)
+    elif Image is not None:
+        resized = np.array(Image.fromarray(binary).resize((w, h), resample=Image.BOX))
+    else:
+        raise RuntimeError("Alpha resize requires opencv-python or pillow.")
+    thr = int(round(255 * float(coverage_threshold)))
+    return np.where(resized >= thr, 255, 0).astype(np.uint8)
+
+
 def _resolve_backend(name):
     name = name.lower()
     if __package__ in (None, ""):
@@ -190,6 +207,7 @@ def main(argv=None):
     parser.add_argument("--grid-size", type=_parse_grid_size, help="Override grid size, e.g. 32x32")
     parser.add_argument("--palette", help="GPL palette path to constrain output colors")
     parser.add_argument("--palette-space", choices=["rgb", "lab"], help="Color space for palette matching")
+    parser.add_argument("--alpha-coverage", type=float, default=0.5, help="Opaque coverage needed per output pixel (0-1)")
     parser.add_argument("--min-size", type=float, default=4.0)
     parser.add_argument("--peak-width", type=int, default=6)
     parser.add_argument("--refine-intensity", type=float, default=0.25)
@@ -220,18 +238,19 @@ def main(argv=None):
     if w is None or h is None:
         raise RuntimeError("Failed to refine image.")
 
+    alpha_out = None
+    if alpha is not None:
+        alpha_out = _alpha_from_source(alpha, out.shape[:2], coverage_threshold=args.alpha_coverage)
+
     if args.palette:
         palette = _load_gpl_palette(args.palette)
         palette_space = args.palette_space or ("lab" if cv2 is not None else "rgb")
         mask = None
-        if alpha is not None:
-            alpha = _resize_alpha(alpha, out.shape[:2])
-            mask = (alpha > 0).reshape(-1)
+        if alpha_out is not None:
+            mask = (alpha_out > 0).reshape(-1)
         out = _apply_palette(out, palette, color_space=palette_space, mask=mask)
 
-    if alpha is not None:
-        alpha = _resize_alpha(alpha, out.shape[:2])
-    _save_image(output_path, out, alpha=alpha)
+    _save_image(output_path, out, alpha=alpha_out)
     print(f"Saved: {output_path} ({w}x{h})")
     return 0
 
