@@ -62,9 +62,11 @@ def _to_uint8(image):
     return np.clip(np.rint(image), 0, 255).astype(np.uint8)
 
 
-def _apply_palette(image, palette, chunk_size=65536, color_space="rgb"):
+def _apply_palette(image, palette, chunk_size=65536, color_space="rgb", mask=None):
     img_u8 = _to_uint8(image)
     pal_u8 = palette.astype(np.uint8, copy=False)
+    if mask is not None:
+        mask = mask.reshape(-1)
 
     if color_space == "lab":
         if cv2 is None:
@@ -74,6 +76,9 @@ def _apply_palette(image, palette, chunk_size=65536, color_space="rgb"):
         out = np.empty_like(flat, dtype=np.uint8)
         for start in range(0, flat.shape[0], chunk_size):
             end = min(start + chunk_size, flat.shape[0])
+            if mask is not None and not mask[start:end].any():
+                out[start:end] = flat[start:end]
+                continue
             block = flat[start:end]
             block_lab = cv2.cvtColor(block.reshape(-1, 1, 3), cv2.COLOR_RGB2LAB).reshape(-1, 3).astype(np.int32)
             diff = block_lab[:, None, :] - pal_lab[None, :, :]
@@ -88,6 +93,9 @@ def _apply_palette(image, palette, chunk_size=65536, color_space="rgb"):
     out = np.empty_like(flat, dtype=np.uint8)
     for start in range(0, flat.shape[0], chunk_size):
         end = min(start + chunk_size, flat.shape[0])
+        if mask is not None and not mask[start:end].any():
+            out[start:end] = flat[start:end]
+            continue
         block = flat[start:end][:, None, :]
         diff = block - pal[None, :, :]
         dist = (diff * diff).sum(axis=2, dtype=np.int64)
@@ -98,26 +106,59 @@ def _apply_palette(image, palette, chunk_size=65536, color_space="rgb"):
 
 def _load_image(path, prefer_cv2=True):
     if prefer_cv2 and cv2 is not None:
-        bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
-        if bgr is None:
+        img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        if img is None:
             raise FileNotFoundError(f"Cannot read image: {path}")
-        return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        if img.ndim == 2:
+            return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB), None
+        if img.shape[2] == 4:
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
+            alpha = img[:, :, 3]
+            return rgb, alpha
+        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB), None
     if Image is None:
         raise RuntimeError("No image reader available. Install opencv-python or pillow.")
     with Image.open(path) as img:
-        return np.array(img.convert("RGB"))
+        if img.mode in ("RGBA", "LA") or ("A" in img.getbands()):
+            rgba = img.convert("RGBA")
+            arr = np.array(rgba)
+            return arr[:, :, :3], arr[:, :, 3]
+        return np.array(img.convert("RGB")), None
 
 
-def _save_image(path, rgb):
+def _save_image(path, rgb, alpha=None):
     if cv2 is not None:
-        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-        if not cv2.imwrite(str(path), bgr):
+        if alpha is not None:
+            bgra = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGRA)
+            bgra[:, :, 3] = alpha
+            ok = cv2.imwrite(str(path), bgra)
+        else:
+            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            ok = cv2.imwrite(str(path), bgr)
+        if not ok:
             raise RuntimeError(f"Failed to write image: {path}")
         return
     if Image is None:
         raise RuntimeError("No image writer available. Install opencv-python or pillow.")
-    img = Image.fromarray(rgb.astype(np.uint8), mode="RGB")
+    if alpha is not None:
+        rgba = np.dstack([rgb.astype(np.uint8), alpha.astype(np.uint8)])
+        img = Image.fromarray(rgba, mode="RGBA")
+    else:
+        img = Image.fromarray(rgb.astype(np.uint8), mode="RGB")
     img.save(path)
+
+
+def _resize_alpha(alpha, size):
+    if alpha is None:
+        return None
+    h, w = size
+    if alpha.shape[0] == h and alpha.shape[1] == w:
+        return alpha
+    if cv2 is not None:
+        return cv2.resize(alpha, (w, h), interpolation=cv2.INTER_NEAREST)
+    if Image is None:
+        raise RuntimeError("Alpha resize requires opencv-python or pillow.")
+    return np.array(Image.fromarray(alpha).resize((w, h), resample=Image.NEAREST))
 
 
 def _resolve_backend(name):
@@ -163,7 +204,7 @@ def main(argv=None):
     output_path = Path(args.output) if args.output else input_path.with_name(f"{input_path.stem}_perfect.png")
 
     get_perfect_pixel, prefer_cv2 = _resolve_backend(args.backend)
-    rgb = _load_image(input_path, prefer_cv2=prefer_cv2)
+    rgb, alpha = _load_image(input_path, prefer_cv2=prefer_cv2)
 
     w, h, out = get_perfect_pixel(
         rgb,
@@ -182,9 +223,15 @@ def main(argv=None):
     if args.palette:
         palette = _load_gpl_palette(args.palette)
         palette_space = args.palette_space or ("lab" if cv2 is not None else "rgb")
-        out = _apply_palette(out, palette, color_space=palette_space)
+        mask = None
+        if alpha is not None:
+            alpha = _resize_alpha(alpha, out.shape[:2])
+            mask = (alpha > 0).reshape(-1)
+        out = _apply_palette(out, palette, color_space=palette_space, mask=mask)
 
-    _save_image(output_path, out)
+    if alpha is not None:
+        alpha = _resize_alpha(alpha, out.shape[:2])
+    _save_image(output_path, out, alpha=alpha)
     print(f"Saved: {output_path} ({w}x{h})")
     return 0
 
