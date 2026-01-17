@@ -56,18 +56,43 @@ def _load_gpl_palette(path):
     return np.array(colors, dtype=np.uint8)
 
 
-def _apply_palette(image, palette, chunk_size=65536):
-    img = image.astype(np.int16, copy=False)
-    pal = palette.astype(np.int16, copy=False)
+def _to_uint8(image):
+    if image.dtype == np.uint8:
+        return image
+    return np.clip(np.rint(image), 0, 255).astype(np.uint8)
+
+
+def _apply_palette(image, palette, chunk_size=65536, color_space="rgb"):
+    img_u8 = _to_uint8(image)
+    pal_u8 = palette.astype(np.uint8, copy=False)
+
+    if color_space == "lab":
+        if cv2 is None:
+            raise RuntimeError("LAB palette mapping requires opencv-python.")
+        pal_lab = cv2.cvtColor(pal_u8.reshape(-1, 1, 3), cv2.COLOR_RGB2LAB).reshape(-1, 3).astype(np.int32)
+        flat = img_u8.reshape(-1, 3)
+        out = np.empty_like(flat, dtype=np.uint8)
+        for start in range(0, flat.shape[0], chunk_size):
+            end = min(start + chunk_size, flat.shape[0])
+            block = flat[start:end]
+            block_lab = cv2.cvtColor(block.reshape(-1, 1, 3), cv2.COLOR_RGB2LAB).reshape(-1, 3).astype(np.int32)
+            diff = block_lab[:, None, :] - pal_lab[None, :, :]
+            dist = (diff * diff).sum(axis=2, dtype=np.int64)
+            idx = dist.argmin(axis=1)
+            out[start:end] = pal_u8[idx]
+        return out.reshape(image.shape)
+
+    img = img_u8.astype(np.int32, copy=False)
+    pal = pal_u8.astype(np.int32, copy=False)
     flat = img.reshape(-1, 3)
     out = np.empty_like(flat, dtype=np.uint8)
     for start in range(0, flat.shape[0], chunk_size):
         end = min(start + chunk_size, flat.shape[0])
         block = flat[start:end][:, None, :]
         diff = block - pal[None, :, :]
-        dist = (diff * diff).sum(axis=2)
+        dist = (diff * diff).sum(axis=2, dtype=np.int64)
         idx = dist.argmin(axis=1)
-        out[start:end] = palette[idx]
+        out[start:end] = pal_u8[idx]
     return out.reshape(image.shape)
 
 
@@ -97,16 +122,18 @@ def _save_image(path, rgb):
 
 def _resolve_backend(name):
     name = name.lower()
+    if __package__ in (None, ""):
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     if name == "auto":
-        from . import get_perfect_pixel as fn
+        from perfect_pixel import get_perfect_pixel as fn
         return fn, (cv2 is not None)
     if name == "opencv":
         if cv2 is None:
             raise RuntimeError("OpenCV backend selected but opencv-python is not installed.")
-        from .perfect_pixel import get_perfect_pixel as fn
+        from perfect_pixel.perfect_pixel import get_perfect_pixel as fn
         return fn, True
     if name == "numpy":
-        from .perfect_pixel_noCV2 import get_perfect_pixel as fn
+        from perfect_pixel.perfect_pixel_noCV2 import get_perfect_pixel as fn
         return fn, False
     raise RuntimeError(f"Unknown backend: {name}")
 
@@ -121,6 +148,7 @@ def main(argv=None):
     parser.add_argument("--sample-method", choices=["center", "majority"], default="center")
     parser.add_argument("--grid-size", type=_parse_grid_size, help="Override grid size, e.g. 32x32")
     parser.add_argument("--palette", help="GPL palette path to constrain output colors")
+    parser.add_argument("--palette-space", choices=["rgb", "lab"], help="Color space for palette matching")
     parser.add_argument("--min-size", type=float, default=4.0)
     parser.add_argument("--peak-width", type=int, default=6)
     parser.add_argument("--refine-intensity", type=float, default=0.25)
@@ -153,7 +181,8 @@ def main(argv=None):
 
     if args.palette:
         palette = _load_gpl_palette(args.palette)
-        out = _apply_palette(out, palette)
+        palette_space = args.palette_space or ("lab" if cv2 is not None else "rgb")
+        out = _apply_palette(out, palette, color_space=palette_space)
 
     _save_image(output_path, out)
     print(f"Saved: {output_path} ({w}x{h})")
