@@ -72,6 +72,19 @@ w, h, out = get_perfect_pixel(rgb)
 python example.py
 ```
 
+### CLI
+After installation, you can run the CLI to process a single image:
+
+```bash
+perfect-pixel path/to/input.png -o path/to/output.png
+```
+
+Or without installation:
+
+```bash
+python -m perfect_pixel.cli path/to/input.png -o path/to/output.png
+```
+
 The grid size is automatically detected, and the image is refined.
 
 <img src="https://github.com/theamusing/perfectPixel/raw/main/assets/process2.png" width="100%" />
