@@ -91,6 +91,12 @@ To constrain output colors to a GIMP palette:
 perfect-pixel path/to/input.png -o path/to/output.png --palette gpl/pixel_base_64.gpl
 ```
 
+You can also choose the palette matching space (default: `lab` when OpenCV is available):
+
+```bash
+perfect-pixel path/to/input.png -o path/to/output.png --palette gpl/retrocal-8.gpl --palette-space lab
+```
+
 The grid size is automatically detected, and the image is refined.
 
 <img src="https://github.com/theamusing/perfectPixel/raw/main/assets/process2.png" width="100%" />
