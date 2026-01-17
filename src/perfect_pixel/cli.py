@@ -32,6 +32,45 @@ def _parse_grid_size(text):
     return (w, h)
 
 
+def _load_gpl_palette(path):
+    colors = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            s = line.strip()
+            if not s or s.startswith("#"):
+                continue
+            if s.lower().startswith("gimp palette") or s.lower().startswith("name:") or s.lower().startswith("columns:"):
+                continue
+            parts = s.split()
+            if len(parts) < 3:
+                continue
+            try:
+                r = int(parts[0])
+                g = int(parts[1])
+                b = int(parts[2])
+            except ValueError:
+                continue
+            colors.append([r, g, b])
+    if not colors:
+        raise RuntimeError(f"No colors found in palette: {path}")
+    return np.array(colors, dtype=np.uint8)
+
+
+def _apply_palette(image, palette, chunk_size=65536):
+    img = image.astype(np.int16, copy=False)
+    pal = palette.astype(np.int16, copy=False)
+    flat = img.reshape(-1, 3)
+    out = np.empty_like(flat, dtype=np.uint8)
+    for start in range(0, flat.shape[0], chunk_size):
+        end = min(start + chunk_size, flat.shape[0])
+        block = flat[start:end][:, None, :]
+        diff = block - pal[None, :, :]
+        dist = (diff * diff).sum(axis=2)
+        idx = dist.argmin(axis=1)
+        out[start:end] = palette[idx]
+    return out.reshape(image.shape)
+
+
 def _load_image(path, prefer_cv2=True):
     if prefer_cv2 and cv2 is not None:
         bgr = cv2.imread(str(path), cv2.IMREAD_COLOR)
@@ -81,6 +120,7 @@ def main(argv=None):
     parser.add_argument("--backend", choices=["auto", "opencv", "numpy"], default="auto")
     parser.add_argument("--sample-method", choices=["center", "majority"], default="center")
     parser.add_argument("--grid-size", type=_parse_grid_size, help="Override grid size, e.g. 32x32")
+    parser.add_argument("--palette", help="GPL palette path to constrain output colors")
     parser.add_argument("--min-size", type=float, default=4.0)
     parser.add_argument("--peak-width", type=int, default=6)
     parser.add_argument("--refine-intensity", type=float, default=0.25)
@@ -110,6 +150,10 @@ def main(argv=None):
 
     if w is None or h is None:
         raise RuntimeError("Failed to refine image.")
+
+    if args.palette:
+        palette = _load_gpl_palette(args.palette)
+        out = _apply_palette(out, palette)
 
     _save_image(output_path, out)
     print(f"Saved: {output_path} ({w}x{h})")
