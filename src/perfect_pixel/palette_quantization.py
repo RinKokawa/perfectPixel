@@ -1,17 +1,9 @@
-import sys
-from pathlib import Path
-
 import numpy as np
 
 try:
     import cv2
 except Exception:
     cv2 = None
-
-try:
-    from PIL import Image
-except Exception:
-    Image = None
 
 
 def load_gpl_palette(path):
@@ -86,120 +78,7 @@ def apply_palette(image, palette, chunk_size=65536, color_space="rgb", mask=None
     return out.reshape(image.shape)
 
 
-def load_image(path, prefer_cv2=True):
-    if prefer_cv2 and cv2 is not None:
-        img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
-        if img is None:
-            raise FileNotFoundError(f"Cannot read image: {path}")
-        if img.ndim == 2:
-            return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB), None
-        if img.shape[2] == 4:
-            rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2RGB)
-            alpha = img[:, :, 3]
-            return rgb, alpha
-        return cv2.cvtColor(img, cv2.COLOR_BGR2RGB), None
-    if Image is None:
-        raise RuntimeError("No image reader available. Install opencv-python or pillow.")
-    with Image.open(path) as img:
-        if img.mode in ("RGBA", "LA") or ("A" in img.getbands()):
-            rgba = img.convert("RGBA")
-            arr = np.array(rgba)
-            return arr[:, :, :3], arr[:, :, 3]
-        return np.array(img.convert("RGB")), None
-
-
-def save_image(path, rgb, alpha=None):
-    if cv2 is not None:
-        if alpha is not None:
-            bgra = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGRA)
-            bgra[:, :, 3] = alpha
-            ok = cv2.imwrite(str(path), bgra)
-        else:
-            bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
-            ok = cv2.imwrite(str(path), bgr)
-        if not ok:
-            raise RuntimeError(f"Failed to write image: {path}")
-        return
-    if Image is None:
-        raise RuntimeError("No image writer available. Install opencv-python or pillow.")
-    if alpha is not None:
-        rgba = np.dstack([rgb.astype(np.uint8), alpha.astype(np.uint8)])
-        img = Image.fromarray(rgba, mode="RGBA")
-    else:
-        img = Image.fromarray(rgb.astype(np.uint8), mode="RGB")
-    img.save(path)
-
-
-def alpha_from_source(alpha, size, coverage_threshold=0.5):
-    if alpha is None:
-        return None
-    h, w = size
-    if alpha.shape[0] == h and alpha.shape[1] == w:
-        return np.where(alpha > 0, 255, 0).astype(np.uint8)
-    binary = np.where(alpha > 0, 255, 0).astype(np.uint8)
-    if cv2 is not None:
-        resized = cv2.resize(binary, (w, h), interpolation=cv2.INTER_AREA)
-    elif Image is not None:
-        resized = np.array(Image.fromarray(binary).resize((w, h), resample=Image.BOX))
-    else:
-        raise RuntimeError("Alpha resize requires opencv-python or pillow.")
-    thr = int(round(255 * float(coverage_threshold)))
-    return np.where(resized >= thr, 255, 0).astype(np.uint8)
-
-
-def resolve_backend(name):
-    name = name.lower()
-    if __package__ in (None, ""):
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-    if name == "auto":
-        from perfect_pixel import get_perfect_pixel as fn
-        return fn, (cv2 is not None)
-    if name == "opencv":
-        if cv2 is None:
-            raise RuntimeError("OpenCV backend selected but opencv-python is not installed.")
-        from perfect_pixel.perfect_pixel import get_perfect_pixel as fn
-        return fn, True
-    if name == "numpy":
-        from perfect_pixel.perfect_pixel_noCV2 import get_perfect_pixel as fn
-        return fn, False
-    raise RuntimeError(f"Unknown backend: {name}")
-
-
-def run_cli(args):
-    input_path = Path(args.input)
-    if not input_path.exists():
-        raise FileNotFoundError(f"Input not found: {input_path}")
-
-    output_path = Path(args.output) if args.output else input_path.with_name(f"{input_path.stem}_perfect.png")
-
-    get_perfect_pixel, prefer_cv2 = resolve_backend(args.backend)
-    rgb, alpha = load_image(input_path, prefer_cv2=prefer_cv2)
-
-    w, h, out = get_perfect_pixel(
-        rgb,
-        sample_method=args.sample_method,
-        grid_size=args.grid_size,
-        min_size=args.min_size,
-        peak_width=args.peak_width,
-        refine_intensity=args.refine_intensity,
-        fix_square=args.fix_square,
-        debug=args.debug,
-    )
-
-    if w is None or h is None:
-        raise RuntimeError("Failed to refine image.")
-
-    alpha_out = None
-    if alpha is not None:
-        alpha_out = alpha_from_source(alpha, out.shape[:2], coverage_threshold=args.alpha_coverage)
-
-    if args.palette:
-        palette = load_gpl_palette(args.palette)
-        palette_space = args.palette_space or ("lab" if cv2 is not None else "rgb")
-        mask = None
-        if alpha_out is not None:
-            mask = (alpha_out > 0).reshape(-1)
-        out = apply_palette(out, palette, color_space=palette_space, mask=mask)
-
-    save_image(output_path, out, alpha=alpha_out)
-    return w, h, output_path
+def quantize(image, palette=None, color_space="rgb", mask=None):
+    if palette is None:
+        return to_uint8(image)
+    return apply_palette(image, palette, color_space=color_space, mask=mask)
