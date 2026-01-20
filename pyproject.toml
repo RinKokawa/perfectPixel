@@ -33,9 +33,6 @@ opencv = ["opencv-python"]
 "Homepage" = "https://github.com/theamusing/perfectPixel"
 "Web Demo" = "https://github.com/theamusing/perfectPixel_webdemo"
 
-[project.scripts]
-perfect-pixel = "perfect_pixel.cli:main"
-
 [tool.setuptools]
 package-dir = {"" = "src"}
 
